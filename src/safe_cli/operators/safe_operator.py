@@ -38,6 +38,7 @@ from web3 import Web3
 from web3.contract import Contract
 from web3.exceptions import BadFunctionCallOutput
 
+from safe_cli.ethereum_client import SafeCliEthereumClient
 from safe_cli.ethereum_hd_wallet import get_account_from_words
 from safe_cli.operators.exceptions import (
     AccountNotLoadedException,
@@ -162,7 +163,7 @@ class SafeOperator:
     ):
         self.address = address
         self.node_url = node_url
-        self.ethereum_client = EthereumClient(self.node_url)
+        self.ethereum_client = SafeCliEthereumClient(self.node_url)
         self.ens = ENS.from_web3(self.ethereum_client.w3)
         self.network: EthereumNetwork = self.ethereum_client.get_network()
         try:
