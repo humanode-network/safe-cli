@@ -1,0 +1,39 @@
+# Humanode's build of safe-cli: upstream's tests on Ganache, as upstream's ci.yml runs them, then the wheel owners
+# install, with a SHA-256 manifest. Runs on every pull request and on main.
+name: humanode-build
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ["humanode-*"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    steps:
+      # Upstream's own test setup (safe-cli .github/workflows/ci.yml): a local Ganache chain, and the actions pinned to
+      # the same commits upstream pins.
+      - name: Create Ganache network
+        run: docker network create ganache
+      - name: Run Ganache
+        run: docker run --detach --publish 8545:8545 --network ganache -e DOCKER=true trufflesuite/ganache:latest --defaultBalanceEther 10000 --gasLimit 10000000 -a 30 --chain.chainId 1337 --chain.networkId 1337 -d
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1, as upstream pins it
+      - uses: astral-sh/setup-uv@18d369b23da25a81e9458561248e1aafff6a70fa # v10.3.1, as upstream pins it
+        with:
+          python-version: "3.13"
+      - name: Install exactly the locked dependencies
+        run: uv sync --group dev --all-extras --frozen
+      - name: Upstream tests
+        run: uv run pytest -rxXs
+      - name: Build the wheel
+        run: uv build --wheel
+      - name: Manifest
+        run: |
+          sha256sum dist/*.whl > dist/SHA256SUMS
+          echo "commit $GITHUB_SHA" >> dist/SHA256SUMS
+      - uses: actions/upload-artifact@v4
+        with:
+          name: safe-cli-${{ github.ref_name }}
+          path: dist/
