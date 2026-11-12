@@ -15,18 +15,6 @@ from web3 import Web3
 
 from . import VERSION
 from .argparse_validators import check_hex_str
-from .gas_fees import (
-    MAX_FEE_ENVVAR,
-    MAX_FEE_FLAG,
-    MAX_FEE_HELP,
-    PRIORITY_FEE_ENVVAR,
-    PRIORITY_FEE_FLAG,
-    PRIORITY_FEE_HELP,
-    check_max_fee,
-    check_priority_fee,
-    set_fees,
-    take_fee_flags,
-)
 from .operators import SafeOperator
 from .safe_cli import SafeCli
 from .tx_builder.exceptions import SoliditySyntaxError, TxBuilderEncodingError
@@ -40,44 +28,6 @@ from .typer_validators import (
 from .utils import get_safe_from_owner
 
 app = typer.Typer(name="Safe CLI")
-
-
-def _as_parameter_check(check):
-    def callback(value: str | None) -> str | None:
-        try:
-            return check(value)
-        except ValueError as error:
-            raise typer.BadParameter(str(error)) from error
-
-    return callback
-
-
-@app.callback()
-def global_options(
-    max_fee_per_gas: Annotated[
-        str | None,
-        typer.Option(
-            MAX_FEE_FLAG,
-            envvar=MAX_FEE_ENVVAR,
-            metavar="[node|GWEI]",
-            help=MAX_FEE_HELP,
-            callback=_as_parameter_check(check_max_fee),
-            show_default=False,
-        ),
-    ] = None,
-    max_priority_fee_per_gas: Annotated[
-        str | None,
-        typer.Option(
-            PRIORITY_FEE_FLAG,
-            envvar=PRIORITY_FEE_ENVVAR,
-            metavar="GWEI",
-            help=PRIORITY_FEE_HELP,
-            callback=_as_parameter_check(check_priority_fee),
-            show_default=False,
-        ),
-    ] = None,
-):
-    set_fees(max_fee_per_gas, max_priority_fee_per_gas)
 
 
 def _build_safe_operator_and_load_keys(
@@ -393,10 +343,7 @@ def version():
             for command in get_command(app).commands.keys()
         ]
     )
-    + "\n\n\n\nUse the --help option of each command to see the usage options."
-    + "\n\n\n\nGlobal options, for every command and the attended mode, anywhere on the command line:"
-    + f"\n\n  {MAX_FEE_FLAG}[=node|GWEI]  {MAX_FEE_HELP} Default: ${MAX_FEE_ENVVAR}."
-    + f"\n\n  {PRIORITY_FEE_FLAG}=GWEI  {PRIORITY_FEE_HELP} Default: ${PRIORITY_FEE_ENVVAR}.",
+    + "\n\n\n\nUse the --help option of each command to see the usage options.",
 )
 def default_attended_mode(
     address: Annotated[
@@ -454,10 +401,7 @@ def _is_safe_cli_default_command(arguments: list[str]) -> bool:
 
 
 def main():
-    # The fee options are global; take them from wherever they were given and hand them to the application itself
-    fee_flags = take_fee_flags(sys.argv)
     # By default, the attended mode is initialised. Otherwise, the required command must be specified.
     if _is_safe_cli_default_command(sys.argv):
         sys.argv.insert(1, "attended-mode")
-    sys.argv[1:1] = fee_flags
     app()

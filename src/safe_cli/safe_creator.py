@@ -1,6 +1,5 @@
 #!/bin/env python3
 import argparse
-import os
 import secrets
 import sys
 
@@ -16,20 +15,6 @@ from safe_eth.eth.contracts import get_safe_V1_4_1_contract
 from safe_eth.safe import ProxyFactory, Safe
 from safe_eth.util.util import to_0x_hex_str
 
-from safe_cli.gas_fees import (
-    MAX_FEE_ENVVAR,
-    MAX_FEE_FLAG,
-    MAX_FEE_HELP,
-    PRIORITY_FEE_ENVVAR,
-    PRIORITY_FEE_FLAG,
-    PRIORITY_FEE_HELP,
-    check_max_fee,
-    check_priority_fee,
-    describe,
-    eip1559_fees,
-    set_fees,
-    take_fee_flags,
-)
 from safe_cli.safe_addresses import (
     get_default_fallback_handler_address,
     get_proxy_factory_address,
@@ -53,32 +38,8 @@ def get_epilog_msg():
     """
 
 
-def _as_argument_type(check):
-    def argument_type(value: str) -> str:
-        try:
-            return check(value)
-        except ValueError as error:
-            raise argparse.ArgumentTypeError(str(error)) from error
-
-    return argument_type
-
-
 def setup_argument_parser():
     parser = argparse.ArgumentParser(description=get_epilog_msg())
-    parser.add_argument(
-        MAX_FEE_FLAG,
-        metavar="[node|GWEI]",
-        help=MAX_FEE_HELP,
-        default=os.environ.get(MAX_FEE_ENVVAR),
-        type=_as_argument_type(check_max_fee),
-    )
-    parser.add_argument(
-        PRIORITY_FEE_FLAG,
-        metavar="GWEI",
-        help=PRIORITY_FEE_HELP,
-        default=os.environ.get(PRIORITY_FEE_ENVVAR),
-        type=_as_argument_type(check_priority_fee),
-    )
     parser.add_argument(
         "-v",
         "--version",
@@ -151,40 +112,11 @@ def setup_argument_parser():
     return parser
 
 
-def deploy_proxy_with_fees(
-    ethereum_client: EthereumClient,
-    proxy_factory: ProxyFactory,
-    account: LocalAccount,
-    master_copy: str,
-    initializer: bytes,
-    salt_nonce: int,
-    fees: dict,
-) -> EthereumTxSent:
-    """
-    ``ProxyFactory.deploy_proxy_contract_with_nonce`` with EIP-1559 fees given by hand (it only takes a legacy
-    gas price).
-    """
-    create_proxy = proxy_factory.get_deploy_function(chain_specific=False)(
-        master_copy, initializer, salt_nonce
-    )
-    contract_address = create_proxy.call({"from": account.address})
-    tx = create_proxy.build_transaction(
-        {"from": account.address, "chainId": ethereum_client.get_chain_id(), **fees}
-    )
-    tx_hash = ethereum_client.send_unsigned_transaction(tx, private_key=account.key)
-    return EthereumTxSent(tx_hash, tx, contract_address)
-
-
 def main(*args, **kwargs) -> EthereumTxSent | None:
     print_formatted_text(text2art("Safe Creator"))  # Print fancy text
 
     parser = setup_argument_parser()
-    sys.argv[1:1] = take_fee_flags(sys.argv)
     args = parser.parse_args()
-    set_fees(
-        getattr(args, "max_fee_per_gas", None),
-        getattr(args, "max_priority_fee_per_gas", None),
-    )
     node_url: URI = args.node_url
     account: LocalAccount = Account.from_key(args.private_key)
     no_confirm: bool = args.no_confirm
@@ -309,28 +241,12 @@ def main(*args, **kwargs) -> EthereumTxSent | None:
                 )
                 sys.exit(1)
 
-            fees = eip1559_fees(ethereum_client)
-            pricing = f" with {describe(fees)}" if fees else ""
             if yes_or_no(
-                f"Safe will be deployed on {expected_safe_address}{pricing}, would you like to proceed?"
+                f"Safe will be deployed on {expected_safe_address}, would you like to proceed?"
             ):
-                if fees:
-                    ethereum_tx_sent = deploy_proxy_with_fees(
-                        ethereum_client,
-                        proxy_factory,
-                        account,
-                        safe_contract_address,
-                        safe_creation_tx_data,
-                        salt_nonce,
-                        fees,
-                    )
-                else:
-                    ethereum_tx_sent = proxy_factory.deploy_proxy_contract_with_nonce(
-                        account,
-                        safe_contract_address,
-                        safe_creation_tx_data,
-                        salt_nonce,
-                    )
+                ethereum_tx_sent = proxy_factory.deploy_proxy_contract_with_nonce(
+                    account, safe_contract_address, safe_creation_tx_data, salt_nonce
+                )
                 print_formatted_text(
                     f"Sent tx with tx-hash={to_0x_hex_str(ethereum_tx_sent.tx_hash)} "
                     f"Safe={ethereum_tx_sent.contract_address} is being created"

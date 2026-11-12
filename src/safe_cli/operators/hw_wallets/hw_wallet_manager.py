@@ -172,7 +172,6 @@ class HwWalletManager:
         tx_gas_price: int | None = None,
         tx_nonce: int | None = None,
         eip1559_speed: TxSpeed | None = None,
-        eip1559_fees: TxParams | None = None,
     ) -> tuple[HexBytes, TxParams]:
         """
         Send multisig tx to the Safe
@@ -182,17 +181,10 @@ class HwWalletManager:
         :param tx_gas_price: Gas price of the external tx. If not, `gas_price` will be used
         :param tx_nonce: Force nonce for `tx_sender`
         :param eip1559_speed: If provided, use EIP1559 transaction
-        :param eip1559_fees: If provided, use these ``maxFeePerGas`` and ``maxPriorityFeePerGas``
         :return: Tuple(tx_hash, tx)
         """
 
-        if eip1559_fees:
-            tx_parameters = {
-                "from": self.sender.address,
-                "chainId": safe_tx.ethereum_client.get_chain_id(),
-                **eip1559_fees,
-            }
-        elif eip1559_speed and safe_tx.ethereum_client.is_eip1559_supported():
+        if eip1559_speed and safe_tx.ethereum_client.is_eip1559_supported():
             tx_parameters = safe_tx.ethereum_client.set_eip1559_fees(
                 {
                     "from": self.sender.address,

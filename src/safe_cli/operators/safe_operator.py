@@ -37,10 +37,9 @@ from safe_eth.util.util import to_0x_hex_str
 from web3 import Web3
 from web3.contract import Contract
 from web3.exceptions import BadFunctionCallOutput
-from web3.types import TxParams, Wei
 
+from safe_cli.ethereum_client import SafeCliEthereumClient
 from safe_cli.ethereum_hd_wallet import get_account_from_words
-from safe_cli.gas_fees import describe, eip1559_fees
 from safe_cli.operators.exceptions import (
     AccountNotLoadedException,
     ExistingOwnerException,
@@ -164,7 +163,7 @@ class SafeOperator:
     ):
         self.address = address
         self.node_url = node_url
-        self.ethereum_client = EthereumClient(self.node_url)
+        self.ethereum_client = SafeCliEthereumClient(self.node_url)
         self.ens = ENS.from_web3(self.ethereum_client.w3)
         self.network: EthereumNetwork = self.ethereum_client.get_network()
         try:
@@ -444,18 +443,17 @@ class SafeOperator:
             sender_account_address, hash_to_approve
         ):
             raise HashAlreadyApproved(hash_to_approve, sender)
-        tx_params = {
-            "from": sender_account_address,
-            "nonce": self.ethereum_client.get_nonce_for_account(sender_account_address),
-        }
-        fees = eip1559_fees(self.ethereum_client)
-        if fees:
-            tx_params.update(fees)
-            print_formatted_text(HTML(f"<ansiyellow>{describe(fees)}</ansiyellow>"))
         transaction_to_send = self.safe_contract.functions.approveHash(
             hash_to_approve
-        ).build_transaction(tx_params)
-        if not fees and self.ethereum_client.is_eip1559_supported():
+        ).build_transaction(
+            {
+                "from": sender_account_address,
+                "nonce": self.ethereum_client.get_nonce_for_account(
+                    sender_account_address
+                ),
+            }
+        )
+        if self.ethereum_client.is_eip1559_supported():
             transaction_to_send = self.ethereum_client.set_eip1559_fees(
                 transaction_to_send
             )
@@ -1038,20 +1036,16 @@ class SafeOperator:
             else:
                 call_result = safe_tx.call(self.hw_wallet_manager.sender.address)
             print_formatted_text(HTML(f"Result: <ansigreen>{call_result}</ansigreen>"))
-            fees = eip1559_fees(self.ethereum_client)
-            pricing = f" with {describe(fees)}" if fees else ""
             if not self.interactive or yes_or_no_question(
-                "Do you want to execute tx " + str(safe_tx) + pricing
+                "Do you want to execute tx " + str(safe_tx)
             ):
-                if self.default_sender and fees:
-                    tx_hash, tx = self._execute_with_fees(safe_tx, fees)
-                elif self.default_sender:
+                if self.default_sender:
                     tx_hash, tx = safe_tx.execute(
                         self.default_sender.key, eip1559_speed=TxSpeed.NORMAL
                     )
                 else:
                     tx_hash, tx = self.hw_wallet_manager.execute_safe_tx(
-                        safe_tx, eip1559_speed=TxSpeed.NORMAL, eip1559_fees=fees
+                        safe_tx, eip1559_speed=TxSpeed.NORMAL
                     )
                 self.executed_transactions.append(to_0x_hex_str(tx_hash))
                 print_formatted_text(
@@ -1088,31 +1082,6 @@ class SafeOperator:
                 HTML(f"Result: <ansired>InvalidTx - {invalid_internal_tx}</ansired>")
             )
         return False
-
-    def _execute_with_fees(
-        self, safe_tx: SafeTx, fees: TxParams
-    ) -> tuple[HexBytes, TxParams]:
-        """
-        ``SafeTx.execute`` with the default sender and EIP-1559 fees given by hand (``SafeTx.execute`` only
-        estimates them). Same gas and nonce handling.
-        """
-        sender = self.default_sender
-        safe_tx.tx = safe_tx.w3_tx.build_transaction(
-            {
-                "from": sender.address,
-                "chainId": self.ethereum_client.get_chain_id(),
-                **fees,
-            }
-        )
-        safe_tx.tx["gas"] = Wei(
-            max(safe_tx.tx["gas"] + 75000, safe_tx.recommended_gas())
-        )
-        safe_tx.tx_hash = self.ethereum_client.send_unsigned_transaction(
-            safe_tx.tx, private_key=sender.key, retry=True, block_identifier="latest"
-        )
-        # As SafeTx.execute: the Safe nonce increases even if the transaction fails, so the signatures are spent
-        safe_tx.signatures = b""
-        return safe_tx.tx_hash, safe_tx.tx
 
     # Batch_transactions multisend
     def batch_safe_txs(
