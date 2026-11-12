@@ -18,6 +18,11 @@ from web3 import Web3
 
 LEGACY_GAS_PRICE_FLAG = "--legacy-gas-price"
 
+# Humanode's build: on these chains --legacy-gas-price is on by default (SAFE_CLI_LEGACY_GAS=0 turns it off). Humanode
+# charges a fixed fee per gas, which eth_gasPrice reports, while eth_feeHistory forecasts 0.875 x that fee after a
+# quiet block, so EIP-1559 fees taken from fee history are refused.
+LEGACY_GAS_DEFAULT_CHAIN_IDS = {5234}
+
 
 def parse_gwei(value: str) -> int:
     """
@@ -64,7 +69,10 @@ def legacy_gas_price(w3: Web3) -> int | None:
     fixed = os.environ.get("SAFE_CLI_LEGACY_GAS_PRICE", "")
     if fixed:
         return parse_gwei(fixed)
-    if os.environ.get("SAFE_CLI_LEGACY_GAS", "") == "1":
+    setting = os.environ.get("SAFE_CLI_LEGACY_GAS", "")
+    if setting == "1" or (
+        setting != "0" and w3.eth.chain_id in LEGACY_GAS_DEFAULT_CHAIN_IDS
+    ):
         return w3.eth.gas_price
     return None
 

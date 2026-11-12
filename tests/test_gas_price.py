@@ -41,6 +41,7 @@ class TestGasPrice(unittest.TestCase):
     def test_legacy_gas_price(self):
         w3 = mock.Mock()
         w3.eth.gas_price = 123
+        w3.eth.chain_id = 1
         with mock.patch.dict(os.environ, {}, clear=True):
             self.assertIsNone(legacy_gas_price(w3))
         with mock.patch.dict(os.environ, {"SAFE_CLI_LEGACY_GAS": "1"}, clear=True):
@@ -51,3 +52,15 @@ class TestGasPrice(unittest.TestCase):
             clear=True,
         ):
             self.assertEqual(legacy_gas_price(w3), 2 * 10**9)
+
+    def test_default_on_humanode(self):
+        w3 = mock.Mock()
+        w3.eth.gas_price = 715_000 * 10**9
+        w3.eth.chain_id = 5234
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertEqual(legacy_gas_price(w3), 715_000 * 10**9)
+        with mock.patch.dict(os.environ, {"SAFE_CLI_LEGACY_GAS": "0"}, clear=True):
+            self.assertIsNone(legacy_gas_price(w3))
+        w3.eth.chain_id = 1
+        with mock.patch.dict(os.environ, {}, clear=True):
+            self.assertIsNone(legacy_gas_price(w3))
