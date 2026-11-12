@@ -15,6 +15,7 @@ from web3 import Web3
 
 from . import VERSION
 from .argparse_validators import check_hex_str
+from .ethereum_client import SafeCliEthereumClient
 from .operators import SafeOperator
 from .safe_cli import SafeCli
 from .tx_builder.exceptions import SoliditySyntaxError, TxBuilderEncodingError
@@ -28,6 +29,31 @@ from .typer_validators import (
 from .utils import get_safe_from_owner
 
 app = typer.Typer(name="Safe CLI")
+
+MAX_FEE_PER_GAS_OPTION = "--max-fee-per-gas"
+
+
+@app.callback()
+def global_options(
+    max_fee_per_gas: Annotated[
+        float | None,
+        typer.Option(
+            MAX_FEE_PER_GAS_OPTION,
+            envvar="SAFE_CLI_MAX_FEE_PER_GAS",
+            help="maxFeePerGas in gwei for each transaction safe-cli sends. Without it safe-cli estimates the "
+            "fee from the fee history. Limit: 10 times the node's gas price. Put it before the command or the "
+            "Safe address.",
+            show_default=False,
+        ),
+    ] = None,
+):
+    if max_fee_per_gas is not None and not max_fee_per_gas > 0:
+        raise typer.BadParameter(
+            "expected a positive number of gwei", param_hint=MAX_FEE_PER_GAS_OPTION
+        )
+    SafeCliEthereumClient.max_fee_per_gas = (
+        None if max_fee_per_gas is None else Web3.to_wei(max_fee_per_gas, "gwei")
+    )
 
 
 def _build_safe_operator_and_load_keys(
@@ -401,7 +427,11 @@ def _is_safe_cli_default_command(arguments: list[str]) -> bool:
 
 
 def main():
+    # --max-fee-per-gas and its value come before the command
+    first = 1
+    if len(sys.argv) > 1 and sys.argv[1].startswith(MAX_FEE_PER_GAS_OPTION):
+        first = 2 if "=" in sys.argv[1] else 3
     # By default, the attended mode is initialised. Otherwise, the required command must be specified.
-    if _is_safe_cli_default_command(sys.argv):
-        sys.argv.insert(1, "attended-mode")
+    if _is_safe_cli_default_command(sys.argv[:1] + sys.argv[first:]):
+        sys.argv.insert(first, "attended-mode")
     app()
