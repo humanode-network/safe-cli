@@ -80,6 +80,7 @@ from safe_cli.utils import (
 )
 
 from ..contracts import safe_to_l2_migration
+from .ethereum_client import SafeCliEthereumClient
 from .hw_wallets.hw_wallet import HwWallet
 from .hw_wallets.hw_wallet_manager import HwWalletType, get_hw_wallet_manager
 
@@ -162,7 +163,7 @@ class SafeOperator:
     ):
         self.address = address
         self.node_url = node_url
-        self.ethereum_client = EthereumClient(self.node_url)
+        self.ethereum_client = SafeCliEthereumClient(self.node_url)
         self.ens = ENS.from_web3(self.ethereum_client.w3)
         self.network: EthereumNetwork = self.ethereum_client.get_network()
         try:

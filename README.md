@@ -97,6 +97,14 @@ safe-cli tx-builder 0xsafeaddress https://sepolia.drpc.org  ./path/to/exported/t
 
 It is possible to use the environment variable `SAFE_CLI_INTERACTIVE=0` to avoid user interactions. The `--non-interactive` option have more priority than environment variable.
 
+The environment variable `SAFE_CLI_MAX_FEE_PER_GAS` sets `maxFeePerGas`, in gwei, for the EIP-1559 transactions `safe-cli` sends. Without it `safe-cli` takes the value from the fee history. Use it on a network that refuses that value, or to raise the cap on a busy one:
+
+```bash
+export SAFE_CLI_MAX_FEE_PER_GAS=<gwei>
+```
+
+The tip still comes from the fee history. `safe-cli` refuses a value of 9.9 times the node's gas price or more. On a network without EIP-1559 fees the variable has no effect. `safe-creator` does not read it.
+
 **Note:** To use tx-service mode, set your API key as follows:
 
 ```bash
