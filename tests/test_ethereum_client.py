@@ -165,7 +165,7 @@ class TestSafeCliEthereumClient(SafeCliTestCaseMixin, unittest.TestCase):
                 (transaction["type"], transaction["maxFeePerGas"]), (2, cap)
             )
 
-        # Without the option the node refuses
+        # Without the option the node refuses: the wording differs between Ganache and anvil
         SafeCliEthereumClient.max_fee_per_gas = None
         safe_operator.default_sender = owner
         forecast = self.w3.eth.get_block("latest")["baseFeePerGas"] * 6 // 10
@@ -174,7 +174,7 @@ class TestSafeCliEthereumClient(SafeCliTestCaseMixin, unittest.TestCase):
                 EthereumClient, "estimate_fee_eip1559", return_value=(forecast, 0)
             ),
             self.assertRaisesRegex(
-                Exception, "max fee per gas less than block base fee"
+                Exception, r"(?i)max ?fee ?per ?gas.*less than.*base ?fee"
             ),
         ):
             safe_operator.send_ether(Account.create().address, 1)
