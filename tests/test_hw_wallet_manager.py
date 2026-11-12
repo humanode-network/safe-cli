@@ -213,3 +213,32 @@ class Testledger_wallet(SafeTestCaseMixin, unittest.TestCase):
         self.assertIsNotNone(
             self.ethereum_client.w3.eth.get_transaction_receipt(tx_hash)
         )
+
+    @mock.patch(
+        "safe_cli.operators.hw_wallets.ledger_wallet.create_transaction", autospec=True
+    )
+    def test_ledger_signs_gas_price(self, mock_create_transaction: MagicMock):
+        ledger_wallet = LedgerWallet.__new__(LedgerWallet)
+        ledger_wallet.derivation_path = "44'/60'/0'/0"
+        ledger_wallet.dongle = None
+        mock_create_transaction.return_value.raw_transaction.return_value = "0x00"
+        transaction = {
+            "to": Account.create().address,
+            "value": 1,
+            "gas": 21000,
+            "nonce": 3,
+        }
+        ledger_wallet.get_signed_raw_transaction(
+            {**transaction, "gasPrice": 25 * 10**9}, 1337
+        )
+        kwargs = mock_create_transaction.call_args.kwargs
+        self.assertEqual(kwargs["gas_price"], 25 * 10**9)
+        self.assertIsNone(kwargs["max_fee_per_gas"])
+
+        ledger_wallet.get_signed_raw_transaction(
+            {**transaction, "maxFeePerGas": 30 * 10**9, "maxPriorityFeePerGas": 1},
+            1337,
+        )
+        kwargs = mock_create_transaction.call_args.kwargs
+        self.assertIsNone(kwargs["gas_price"])
+        self.assertEqual(kwargs["max_fee_per_gas"], 30 * 10**9)
