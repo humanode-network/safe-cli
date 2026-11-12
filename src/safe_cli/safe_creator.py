@@ -15,6 +15,11 @@ from safe_eth.eth.contracts import get_safe_V1_4_1_contract
 from safe_eth.safe import ProxyFactory, Safe
 from safe_eth.util.util import to_0x_hex_str
 
+from safe_cli.gas_price import (
+    describe,
+    legacy_gas_price,
+    take_legacy_gas_price_flag,
+)
 from safe_cli.safe_addresses import (
     get_default_fallback_handler_address,
     get_proxy_factory_address,
@@ -116,6 +121,7 @@ def main(*args, **kwargs) -> EthereumTxSent | None:
     print_formatted_text(text2art("Safe Creator"))  # Print fancy text
 
     parser = setup_argument_parser()
+    take_legacy_gas_price_flag(sys.argv)
     args = parser.parse_args()
     node_url: URI = args.node_url
     account: LocalAccount = Account.from_key(args.private_key)
@@ -241,11 +247,17 @@ def main(*args, **kwargs) -> EthereumTxSent | None:
                 )
                 sys.exit(1)
 
+            gas_price = legacy_gas_price(ethereum_client.w3)
+            pricing = "" if gas_price is None else f" with {describe(gas_price)}"
             if yes_or_no(
-                f"Safe will be deployed on {expected_safe_address}, would you like to proceed?"
+                f"Safe will be deployed on {expected_safe_address}{pricing}, would you like to proceed?"
             ):
                 ethereum_tx_sent = proxy_factory.deploy_proxy_contract_with_nonce(
-                    account, safe_contract_address, safe_creation_tx_data, salt_nonce
+                    account,
+                    safe_contract_address,
+                    safe_creation_tx_data,
+                    salt_nonce,
+                    gas_price=gas_price,
                 )
                 print_formatted_text(
                     f"Sent tx with tx-hash={to_0x_hex_str(ethereum_tx_sent.tx_hash)} "

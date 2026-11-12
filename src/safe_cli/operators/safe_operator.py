@@ -39,6 +39,7 @@ from web3.contract import Contract
 from web3.exceptions import BadFunctionCallOutput
 
 from safe_cli.ethereum_hd_wallet import get_account_from_words
+from safe_cli.gas_price import describe, legacy_gas_price
 from safe_cli.operators.exceptions import (
     AccountNotLoadedException,
     ExistingOwnerException,
@@ -442,17 +443,20 @@ class SafeOperator:
             sender_account_address, hash_to_approve
         ):
             raise HashAlreadyApproved(hash_to_approve, sender)
+        tx_params = {
+            "from": sender_account_address,
+            "nonce": self.ethereum_client.get_nonce_for_account(sender_account_address),
+        }
+        gas_price = legacy_gas_price(self.ethereum_client.w3)
+        if gas_price is not None:
+            tx_params["gasPrice"] = gas_price
+            print_formatted_text(
+                HTML(f"<ansiyellow>{describe(gas_price)}</ansiyellow>")
+            )
         transaction_to_send = self.safe_contract.functions.approveHash(
             hash_to_approve
-        ).build_transaction(
-            {
-                "from": sender_account_address,
-                "nonce": self.ethereum_client.get_nonce_for_account(
-                    sender_account_address
-                ),
-            }
-        )
-        if self.ethereum_client.is_eip1559_supported():
+        ).build_transaction(tx_params)
+        if gas_price is None and self.ethereum_client.is_eip1559_supported():
             transaction_to_send = self.ethereum_client.set_eip1559_fees(
                 transaction_to_send
             )
@@ -1035,16 +1039,21 @@ class SafeOperator:
             else:
                 call_result = safe_tx.call(self.hw_wallet_manager.sender.address)
             print_formatted_text(HTML(f"Result: <ansigreen>{call_result}</ansigreen>"))
+            gas_price = legacy_gas_price(self.ethereum_client.w3)
+            speed = TxSpeed.NORMAL if gas_price is None else None
+            pricing = "" if gas_price is None else f" with {describe(gas_price)}"
             if not self.interactive or yes_or_no_question(
-                "Do you want to execute tx " + str(safe_tx)
+                "Do you want to execute tx " + str(safe_tx) + pricing
             ):
                 if self.default_sender:
                     tx_hash, tx = safe_tx.execute(
-                        self.default_sender.key, eip1559_speed=TxSpeed.NORMAL
+                        self.default_sender.key,
+                        tx_gas_price=gas_price,
+                        eip1559_speed=speed,
                     )
                 else:
                     tx_hash, tx = self.hw_wallet_manager.execute_safe_tx(
-                        safe_tx, eip1559_speed=TxSpeed.NORMAL
+                        safe_tx, tx_gas_price=gas_price, eip1559_speed=speed
                     )
                 self.executed_transactions.append(to_0x_hex_str(tx_hash))
                 print_formatted_text(

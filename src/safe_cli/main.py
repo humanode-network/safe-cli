@@ -15,6 +15,7 @@ from web3 import Web3
 
 from . import VERSION
 from .argparse_validators import check_hex_str
+from .gas_price import take_legacy_gas_price_flag
 from .operators import SafeOperator
 from .safe_cli import SafeCli
 from .tx_builder.exceptions import SoliditySyntaxError, TxBuilderEncodingError
@@ -401,6 +402,7 @@ def _is_safe_cli_default_command(arguments: list[str]) -> bool:
 
 
 def main():
+    take_legacy_gas_price_flag(sys.argv)
     # By default, the attended mode is initialised. Otherwise, the required command must be specified.
     if _is_safe_cli_default_command(sys.argv):
         sys.argv.insert(1, "attended-mode")
