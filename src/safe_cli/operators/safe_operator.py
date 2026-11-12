@@ -460,10 +460,15 @@ class SafeOperator:
         if call_result:  # There's revert message
             return False
         else:
-            signed_transaction = sender_account.sign_transaction(transaction_to_send)
-            tx_hash = self.ethereum_client.send_raw_transaction(
-                signed_transaction["raw_transaction"]
-            )
+            if hasattr(sender_account, "get_signed_raw_transaction"):  # Ledger, Trezor
+                raw_transaction = sender_account.get_signed_raw_transaction(
+                    transaction_to_send, self.ethereum_client.get_chain_id()
+                )
+            else:
+                raw_transaction = sender_account.sign_transaction(transaction_to_send)[
+                    "raw_transaction"
+                ]
+            tx_hash = self.ethereum_client.send_raw_transaction(raw_transaction)
             print_formatted_text(
                 HTML(
                     f"<ansigreen>Sent tx with tx-hash {to_0x_hex_str(tx_hash)} from owner "

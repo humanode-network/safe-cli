@@ -184,6 +184,24 @@ class TestSafeOperator(SafeCliTestCaseMixin, unittest.TestCase):
         with self.assertRaises(HashAlreadyApproved):
             safe_operator.approve_hash(safe_tx_hash, self.ethereum_test_account.address)
 
+    def test_approve_hash_with_hardware_wallet(self):
+        owner = self.ethereum_test_account
+        safe_address = self.deploy_test_safe(owners=[owner.address]).address
+        safe_operator = SafeOperator(safe_address, self.ethereum_node_url)
+        safe_tx_hash = Web3.keccak(text="hardware-wallet")
+        # A hardware wallet has no sign_transaction
+        hw_wallet = mock.Mock(spec=["address", "get_signed_raw_transaction"])
+        hw_wallet.address = owner.address
+        hw_wallet.get_signed_raw_transaction.side_effect = lambda tx, chain_id: (
+            self.w3.eth.account.sign_transaction(tx, owner.key).raw_transaction
+        )
+        with mock.patch.object(safe_operator, "search_account", return_value=hw_wallet):
+            self.assertTrue(safe_operator.approve_hash(safe_tx_hash, owner.address))
+        hw_wallet.get_signed_raw_transaction.assert_called_once()
+        self.assertTrue(
+            safe_operator.safe.retrieve_is_hash_approved(owner.address, safe_tx_hash)
+        )
+
     @mock.patch("safe_cli.safe_addresses._get_valid_contract")
     def test_sign_message(self, mock_sign_message_lib_address):
         safe_address = self.deploy_test_safe(
