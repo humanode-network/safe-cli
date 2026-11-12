@@ -1,24 +1,40 @@
 from safe_eth.eth import EthereumClient, TxSpeed
+from web3 import Web3
 from web3.types import TxParams, Wei
+
+# A cap above this many times the node's gas price is refused: far more likely a typing mistake (extra zeros, wei
+# taken for gwei) than an intended fee
+MAX_FEE_PER_GAS_LIMIT = 10
 
 
 class SafeCliEthereumClient(EthereumClient):
     """
-    ``EthereumClient`` that does not cap the fee of an EIP-1559 transaction below the node's own gas price.
+    ``EthereumClient`` whose EIP-1559 ``maxFeePerGas`` the user can set, with ``--max-fee-per-gas``.
 
-    ``EthereumClient.set_eip1559_fees`` takes ``maxFeePerGas`` from ``eth_feeHistory``: the next block's forecast
-    base fee plus the tip. A chain that charges more than its fee history forecasts (a fixed-fee chain whose node
-    still projects a falling base fee) refuses such a transaction. There the node's ``eth_gasPrice`` is above the
-    forecast, and it becomes the cap. Where the forecast is at or above ``eth_gasPrice``, nothing changes.
+    ``EthereumClient.set_eip1559_fees`` takes ``maxFeePerGas`` from ``eth_feeHistory`` and offers no way to change
+    it. Some chains refuse that estimate (a fixed-fee chain whose node forecasts less than it charges), and on a
+    busy chain the user may want a higher cap. A cap above ``MAX_FEE_PER_GAS_LIMIT`` times the node's gas price is
+    refused before anything is sent.
     """
+
+    # Cap in wei for every transaction sent. ``None`` keeps the estimate.
+    max_fee_per_gas: int | None = None
 
     def set_eip1559_fees(
         self, tx: TxParams, tx_speed: TxSpeed = TxSpeed.NORMAL
     ) -> TxParams:
-        """
-        :return: TxParams in EIP1559 format, with ``maxFeePerGas`` of at least ``eth_gasPrice``
-        :raises: ValueError if EIP1559 not supported
-        """
         tx = super().set_eip1559_fees(tx, tx_speed)
-        tx["maxFeePerGas"] = Wei(max(tx["maxFeePerGas"], self.w3.eth.gas_price))
+        if self.max_fee_per_gas is not None:
+            node_price = self.w3.eth.gas_price
+            if node_price and self.max_fee_per_gas > MAX_FEE_PER_GAS_LIMIT * node_price:
+                raise ValueError(
+                    f"--max-fee-per-gas: {Web3.from_wei(self.max_fee_per_gas, 'gwei')} gwei is more than "
+                    f"{MAX_FEE_PER_GAS_LIMIT} times the node's gas price "
+                    f"({Web3.from_wei(node_price, 'gwei')} gwei), nothing was sent"
+                )
+            tx["maxFeePerGas"] = Wei(self.max_fee_per_gas)
+            # The tip cannot be above the cap
+            tx["maxPriorityFeePerGas"] = min(
+                tx["maxPriorityFeePerGas"], tx["maxFeePerGas"]
+            )
         return tx
