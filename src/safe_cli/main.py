@@ -40,8 +40,9 @@ def global_options(
         typer.Option(
             MAX_FEE_PER_GAS_OPTION,
             envvar="SAFE_CLI_MAX_FEE_PER_GAS",
-            help="maxFeePerGas, in gwei, for every transaction sent, instead of the estimate from the fee "
-            "history; at most 10 times the node's gas price. Goes before the command or the Safe address.",
+            help="maxFeePerGas in gwei for each transaction safe-cli sends. Without it safe-cli estimates the "
+            "fee from the fee history. Limit: 10 times the node's gas price. Put it before the command or the "
+            "Safe address.",
             show_default=False,
         ),
     ] = None,
@@ -426,7 +427,7 @@ def _is_safe_cli_default_command(arguments: list[str]) -> bool:
 
 
 def main():
-    # The global option and its value, if given, go before the command
+    # --max-fee-per-gas and its value come before the command
     first = 1
     if len(sys.argv) > 1 and sys.argv[1].startswith(MAX_FEE_PER_GAS_OPTION):
         first = 2 if "=" in sys.argv[1] else 3

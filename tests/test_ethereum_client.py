@@ -63,7 +63,7 @@ class TestSafeCliEthereumClient(SafeCliTestCaseMixin, unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "more than 10 times"):
             self._fees(20 * GWEI, 2 * GWEI, 22 * GWEI)
 
-        # A node that reports no gas price (some development chains) gives nothing to compare with
+        # Some development chains report a gas price of 0: no limit applies
         self._fees(20 * GWEI, 2 * GWEI, 0)
 
     def test_command_line_option(self):
@@ -124,8 +124,7 @@ class TestSafeCliEthereumClient(SafeCliTestCaseMixin, unittest.TestCase):
         self.w3.eth.send_transaction(
             {"from": owner.address, "to": safe_operator.address, "value": 10}
         )
-        # A fee history that forecasts 0.6 x the base fee the chain charges. A cap at the forecast is below the
-        # base fee and the node refuses the transaction: "max fee per gas less than block base fee".
+        # The fee history forecasts 0.6 x the base fee the chain charges, so the node refuses the estimate
         forecast = self.w3.eth.get_block("latest")["baseFeePerGas"] * 6 // 10
         cap = self.w3.eth.gas_price * 3
         SafeCliEthereumClient.max_fee_per_gas = cap
@@ -166,7 +165,7 @@ class TestSafeCliEthereumClient(SafeCliTestCaseMixin, unittest.TestCase):
                 (transaction["type"], transaction["maxFeePerGas"]), (2, cap)
             )
 
-        # Without the option the node refuses the same estimate
+        # Without the option the node refuses
         SafeCliEthereumClient.max_fee_per_gas = None
         safe_operator.default_sender = owner
         forecast = self.w3.eth.get_block("latest")["baseFeePerGas"] * 6 // 10
